@@ -1,10 +1,10 @@
 import zipfile
 import wget
-import os
-from os.path import join, basename, exists
-from mycroft import MycroftSkill, intent_file_handler
-from mycroft.configuration.config import Configuration
 import polib
+import os 
+from os import walk, makedirs
+from os.path import join, basename, exists, expanduser, isdir, isfile
+from mycroft import MycroftSkill, intent_file_handler
 
 
 class PootleSync(MycroftSkill):
@@ -12,20 +12,23 @@ class PootleSync(MycroftSkill):
         MycroftSkill.__init__(self)
 
     def initialize(self):
-        if self.settings.get('lang_path') is not "":
-            self.lang_path = self.settings.get('lang_path')
-            self.log.info("found user folder")
-        elif 'translations_dir' in Configuration.get():
-            self.lang_path = Configuration.get()['translations_dir']
-            self.log.info("found transaltion folder")
+        translations_dir = self.config_core.get('skills').get('translations_dir')
+        translations_dir = expanduser(translations_dir)
+        user_lang_path = self.settings.get('lang_path') 
+        if user_lang_path:
+            self.lang_path = user_lang_path
+        if (translations_dir):
+            self.lang_path = translations_dir
         else:
-            self.lang_path = self.file_system.path+"/mycroft-skills/"
-            self.log.info("set default language path")
-        if self.settings.get('synctimer') >= 1:
-            sync = self.settings.get('synctimer') * 3600
-            self.schedule_repeating_event(self.sync_pootle, None, sync,
-                                          name='sync_pootle')
-            self.log.info("start pootdle event every "+str(self.settings.get('synctimer'))+" h")
+            self.lang_path = join(self.file_system.path, "translations")
+
+        self.log.info("Translations are saved in " + self.lang_path)
+
+#        if self.settings.get('synctimer', 1) >= 1:
+#            sync = self.settings.get('synctimer', 1) * 3600
+#            self.schedule_repeating_event(self.sync_pootle, None, sync,
+#                                          name='sync_pootle')
+#            self.log.info("start pootdle event every " + str(self.settings.get('synctimer')) + " h")
 
     @intent_file_handler('sync.pootle.intent')
     def handle_sync_pootle(self, message):
@@ -33,29 +36,25 @@ class PootleSync(MycroftSkill):
         self.sync_pootle()
 
     def sync_pootle(self):
-        if self.settings.get('synctimer') < 1:
+        if self.settings.get('synctimer', 1) < 1:
             self.cancel_scheduled_event('sync_pootle')
         self.poodle_downloader()
-        folder = self.file_system.path+"/de/de/mycroft-skills"
+        folder = self.file_system.path+"/da/da/mycroft-skills"
         self.find_po(folder)
         #self.log.info(translation)
 
     def find_po(self, folder):
         for root, dirs, files in os.walk(folder):
             for f in files:
-                filename = os.path.join(root, f)
+                filename = join(root, f)
                 if filename.endswith('.po'):
                     output = self.parse_po_file(filename)
-                    filename = filename.replace(folder+"/", '')
+                    filename = filename.replace(folder + "/", '')
                     skillname = filename[:-6]
                     for data in output:
-                        filename = self.lang_path+skillname+"/"+self.lang+"/locale/"+data
-                        #old_data = self.reading_sentence(data, filename)
-                        #if output[data] is old_data:
-                        #    self.log.info("nothing new, skip"+filename)
-                        #else:
+                        self.log.info(self.lang_path + ' ' + skillname + ' ' +  self.lang + ' ' + data)
+                        filename = join(self.lang_path, skillname, self.lang, data)
                         self.writing_sentence(output[data], data, filename)
-
 
     def poodle_downloader(self):
         self.log.info("start download")
@@ -76,7 +75,7 @@ class PootleSync(MycroftSkill):
 
     def writing_sentence(self, sentence, data, filename):
         sentence = "\n".join(sentence)
-        folder =filename.replace(data, '')
+        folder = filename.replace(data, '')
         if not os.path.isdir(folder):
             os.makedirs(folder)
         fobj_out = open(filename, "w")
@@ -104,7 +103,7 @@ class PootleSync(MycroftSkill):
                 content = out_files.get(f, [])
                 content.append(entity.msgstr)
                 out_files[f] = content
-
+        self.log.info(out_files)
         return out_files
 
     def shutdown(self):
