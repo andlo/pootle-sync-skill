@@ -10,7 +10,7 @@
      - requests
      - polib
      - wget
-     - zipfile
+#     - zipfile
 #     - gensim
 #
 #   # Install packages with the system package manager
